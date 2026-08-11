@@ -1,0 +1,69 @@
+# .exa/registry-check.yml — run at the D9 authoring path, before the
+# constraint block reaches the local Logic-Review Gate. Portable across
+# CI systems (GitHub Actions, GitLab CI, Jenkins) as a single job spec.
+#
+# Source: EXA_AgenticWorkflow_Step8_RatifiedSourceImplementationDetail_v1.4.md §1.3a
+# Ratified: added on external review finding 2.1; amended per Q-034/D-065
+# (2026-08-08); Step 8 v1.4 ratified 2026-08-11
+#
+# WHAT THIS CONFIG BLOCK IS: the one required shape every CI system must
+# produce — the specific fields, the specific non-blocking behavior on
+# candidate_duplicate, the specific fail-open-with-alert behavior on
+# registry unavailability.
+#
+# WHAT IT IS NOT: a runnable CI system itself. GitHub Actions, GitLab CI,
+# and Jenkins each translate this shape into their own job syntax, exactly
+# as the tool register schema (Step 4 §3.4) is a required field set, not a
+# specific CI vendor's YAML. A train's CI-specific translation is
+# conformant if and only if it reproduces every field and every on_result
+# branch below; a translation that silently drops on_registry_unavailable's
+# fail-open behavior, for instance, would re-introduce exactly the coupling
+# this check was built to avoid.
+#
+# CONSEQUENCE if a train invents its own shape rather than conforming to
+# this block: HIGH. A registry federation that looks uniform from the
+# schema but behaves differently train to train — undetectable until two
+# P&Ls compare notes on a stalled reconciliation.
+
+exa_registry_check:
+  trigger: on_governed_object_submit            # fires at D9 authoring for
+                                                  # constraint blocks, and at
+                                                  # Step 7 §6.2 G1 for Generative
+                                                  # Envelopes (amended, Q-034)
+  registry_endpoint: "${EXA_REGISTRY_URL}"       # resolves to the constraint
+                                                  # library's federation index
+  input:
+    exa_constraint_id: "${OBJECT.exa_constraint_id}"        # universal routing
+                                                              # key, all classes
+    exa_constraint_class: "${OBJECT.exa_constraint_class}"   # added, Q-034/D-065
+    semantic_fingerprint: "${OBJECT.semantic_fingerprint}"   # computed per class —
+                                                              # C7-field hash for
+                                                              # constraints, Step 7
+                                                              # §5.2a shape
+                                                              # fingerprint for
+                                                              # envelopes
+    governing_pnl: "${TRAIN.pnl_id}"
+  match_scope:
+    filter_by: exa_constraint_class              # added, Q-034 — cross-class
+                                                  # fingerprint comparison is a
+                                                  # collision, never a duplicate
+  on_result:
+    unique:
+      action: proceed                            # block enters local gate normally
+      block_certification: false
+    candidate_duplicate:
+      action: flag_and_proceed                   # never blocks certification
+      block_certification: false
+      notify:
+        - "${TRAIN.eea_contact}"                   # submitting squad's own EEA
+        - "${MATCH.governing_pnl.eea_contact}"      # the other matched P&L's EEA
+      write_to_registry:
+        federation_status: candidate_duplicate
+        matched_entry_id: "${MATCH.registry_entry_id}"
+        flagged_at: "${NOW}"
+      exit_code: 0                                # non-blocking by design
+  on_registry_unavailable:
+    action: proceed                               # the local gate is never
+                                                    # gated on registry uptime
+    log: "registry_check_skipped: endpoint unreachable"
+    alert: "${TRAIN.eea_contact}"

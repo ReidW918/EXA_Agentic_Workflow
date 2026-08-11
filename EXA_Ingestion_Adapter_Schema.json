@@ -1,0 +1,44 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EXA_Ingestion_Adapter_Schema",
+  "version": "1.1",
+  "description": "The one normalized shape every per-source adapter must produce before an event is admitted to the aggregated override log (Step 4 §4.4, Step 5 §6.1). Consumes exa.constraint.id / exa.constraint.version / exa.surface.id verbatim from Q-019/D-033. v1.1 adds exa_constraint_class per the Q-034 ruling (D-065): one universal routing key, one discriminator field, no parallel ID namespaces. Source: EXA_AgenticWorkflow_Step8_RatifiedSourceImplementationDetail_v1.4.md §2.3a.",
+  "type": "object",
+  "properties": {
+    "exa_constraint_id": {
+      "type": "string",
+      "description": "Required. The single universal routing key for ANY ratified specification object governing agentic execution — a state constraint, a Generative Envelope, a Vendor Envelope, or a Generative Vendor Envelope. Per Q-034 (D-065), a Generative Envelope's identity resolves an exa_constraint_id at the enforcement plane; envelope_id is its authoring-plane form, not a parallel key. Must resolve to an existing ratified object. Never inferred or backfilled by the adapter — see the validation table in docs/adapter-validation-rules.md."
+    },
+    "exa_constraint_class": {
+      "type": "string",
+      "enum": ["state_constraint", "generative_envelope", "vendor_envelope", "generative_vendor_envelope"],
+      "description": "Required. The authoring-plane type of the object exa_constraint_id resolves to. Added per Q-034 (D-065). This field carries object-type information WITHOUT fracturing the routing key: every consumer still joins on exa_constraint_id alone and may filter on class, rather than joining across disparate namespaces. Extensible — a new governed object class adds an enum value here, never a new ID field."
+    },
+    "exa_constraint_version": {
+      "type": "string",
+      "description": "Optional at ingestion; if absent, resolves to the object's current certified version at aggregation time."
+    },
+    "exa_surface_id": {
+      "type": "string",
+      "description": "Optional at ingestion for Jira-originated events, since a manually filed override may not always carry a resolvable surface ID; required for CI/CD- and gateway-originated events, where the surface is always known structurally."
+    },
+    "event_type": {
+      "type": "string",
+      "enum": ["override", "rejection", "deviation", "clarification", "containment_discard"],
+      "description": "v1.1 adds two values per Q-034's amendment pass. 'clarification' admits the Agent Clarification Log (A-15) that Step 4 §2.5 mandates as machine-captured telemetry — closing F-01. 'containment_discard' admits Step 7 §4.3's DISCARD_AND_REPROMPT Containment State invocations, which Step 7 §4.3a (D-056) requires be metered as retry cycles against SS-1."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "squad_id": {
+      "type": "string",
+      "description": "Required. Must identify a specific submitting squad, not a shared or default value — see the validation table in docs/adapter-validation-rules.md for why this is load-bearing."
+    },
+    "native_payload_ref": {
+      "type": "string",
+      "description": "Pointer to the original Jira ticket ID, CI job ID, or Agent Clarification Log entry. Not consumed by any trigger-evaluation logic — carried strictly for auditability, so a Structural Signal finding can be traced back to its originating filings."
+    }
+  },
+  "required": ["exa_constraint_id", "exa_constraint_class", "event_type", "timestamp", "squad_id"]
+}

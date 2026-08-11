@@ -1,0 +1,73 @@
+# .exa/workspace-boundary.yml — repository root.
+# Layer 0. Advisory-with-telemetry. Not a substitute for Layer 3.
+#
+# Source: EXA_AgenticWorkflow_Step4_AgenticToolchain_v1.5.md §4.0
+# Ratified: Q-033/D-066 (2026-08-08), Step 4 v1.5 ratified 2026-08-11
+#
+# WHAT THIS IS: a local control on the developer workspace — a pre-commit
+# hook, an agentic IDE boundary configuration, or both — that protects
+# constraint-library paths from autonomous agent writes at the point the
+# write is attempted, rather than at the point a commit reaches CI.
+#
+# WHAT THIS IS EXPLICITLY NOT: this layer does NOT close Disqualifier X-6
+# (Step 4 §1.2), and this repository does not claim it does. A developer
+# with filesystem access can disable this hook, edit this config, or
+# bypass the workspace entirely. Layer 3's constraint provenance
+# verification (see docs/layer3-provenance-verification.md) is the actual
+# enforcement boundary for the constraint library's write authority.
+# Layer 0 is defense-in-depth against the accidental case — an agent
+# performing a broad refactor that incidentally touches a protected path
+# — not against a determined bypass.
+#
+# A framework claiming a local control stops a local actor has replaced
+# a known gap with a false assurance, which is worse than the gap.
+
+protected_paths:                    # paths where autonomous agent writes
+  - ".exa/constraints/**"           # are blocked and reported
+  - ".exa/registry/**"
+  - ".cursorrules"
+  - "**/*.constraint.md"
+
+on_agent_write_attempt:
+  action: block_and_report          # block locally, always emit — never
+                                     # block silently, since a silent block
+                                     # teaches the operator nothing and
+                                     # produces no Layer 4 signal
+  message: >
+    Constraint-library paths are not agent-writable.
+    Amendments are filed through the Amendment Protocol queue,
+    not edited in place.
+
+telemetry:                          # the load-bearing half of this layer
+  emit: true                        # MANDATORY — see consequence below
+  event_type: deviation             # per EXA_Ingestion_Adapter_Schema v1.1 enum
+  exa_constraint_class: state_constraint
+  exa_constraint_id: "${TARGET.exa_constraint_id}"   # the object whose
+                                                       # governing file the
+                                                       # agent attempted to edit
+  squad_id: "${WORKSPACE.squad_id}"
+
+enforcement_status: advisory        # stated in the artifact itself so no
+                                     # reader mistakes this for a hard boundary
+
+# ---------------------------------------------------------------------------
+# WHAT IT CATCHES: the accidental case, which is the frequent one — an agent
+# instructed to refactor broadly, encountering a constraint file, and
+# editing it because nothing told it not to. More valuable than the block
+# itself: it makes the attempt visible.
+#
+# WHAT IT DOES NOT CATCH: deliberate circumvention, a workspace with this
+# config removed, an agent operating outside the governed repository, or an
+# edit made through a path the protected_paths glob does not cover. All
+# four are Layer 3's problem, and Layer 3 still owns them.
+#
+# CONSEQUENCE if telemetry.emit is false or this layer is deployed as a
+# silent block: HIGH. A local block that reports nothing converts a
+# governance signal into a private inconvenience.
+#
+# CONSEQUENCE if this layer is documented or sold internally as closing
+# X-6: CRITICAL. X-6 disqualifies tools that write to the constraint
+# library autonomously. A tool that does so, running in a workspace with
+# this hook, is still disqualified — the hook does not make it compliant,
+# it makes one class of its violations noisy.
+# ---------------------------------------------------------------------------
